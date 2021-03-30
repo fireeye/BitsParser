@@ -22,7 +22,11 @@ import traceback
 
 from ese.ese import ESENT_DB
 
-import advapi32
+# On Windows advapi32 will be used to resolve SIDs
+try:
+    import advapi32
+except Exception:
+    pass
 
 import bits
 from bits.structs import FILE, CONTROL, JOB
@@ -71,7 +75,7 @@ class BitsParser:
             self.sid_user_cache[sid] = username
             return username
         except Exception as e:
-            print(f'Failed to resolve sid {sid}: ' + str(e))
+            print(f'Failed to resolve sid {sid}: ' + str(e), file=sys.stderr)
             self.sid_user_cache[sid] = None
             return None
 
@@ -125,6 +129,13 @@ class BitsParser:
         if len(job_data) < 128:
             return None
         try:
+
+            # Because it can be expensive to parse a JOB structure if the data is not valid,
+            # do a simple check to see if the job name length is valid
+            name_length = struct.unpack_from("<L", job_data, 32)[0]
+            if 32 + name_length * 2 > len(job_data):
+                return None
+
             # Parse as a JOB
             try:
                 parsed_job = JOB.parse(job_data)
@@ -141,6 +152,9 @@ class BitsParser:
                 xfer_parts = job_data.split(XFER_HEADER)
                 file_ref_data = xfer_parts[1]
                 num_file_refs = struct.unpack_from("<L", file_ref_data)[0]
+                # Validate the number of file references to avoid expensive parsing failures
+                if 4 + num_file_refs * 16 > len(file_ref_data):
+                    return None
                 for i in range(0, num_file_refs):
                     # Parse the GUID and attempt to find correlated FILE
                     cur_guid = file_ref_data[4+i*16:4+(i+1)*16]
@@ -154,7 +168,7 @@ class BitsParser:
             new_job = BitsJob(parsed_job, self)
             return new_job
         except Exception:
-            print(f'Exception occurred parsing job: ' + traceback.format_exc())
+            print(f'Exception occurred parsing job: ' + traceback.format_exc(), file=sys.stderr)
             return None
 
 
@@ -165,6 +179,12 @@ class BitsParser:
         if len(file_data) < 256:
             return None
         try:
+            # Because it can be expensive to parse a FILE structure if the data is not valid,
+            # do a simple check to see if the filename length is valid
+            filename_length = struct.unpack_from("<L", file_data)[0]
+            if 4 + filename_length * 2 > len(file_data):
+                return None
+
             # Parse the FILE
             parsed_file = FILE.parse(file_data)
 
@@ -271,6 +291,8 @@ class BitsParser:
         # Carve jobs from the database (note that there are multiple potential job delimiters)
         for job_delimiter in WIN10_JOB_DELIMITERS:
             carved_jobs = file_data.split(job_delimiter)
+            if len(carved_jobs) == 1:
+                continue
             for i in range(1, len(carved_jobs)):
                 new_job = self.parse_qmgr10_job(carved_jobs[i])
                 if new_job:
@@ -333,7 +355,7 @@ class BitsParser:
 
         try:
             # Read the file (may need to raw read)
-            print("Processing file "+file_path)
+            print("Processing file "+file_path, file=sys.stderr)
             file_data = None
             with open(file_path, "rb") as f:
                 file_data = f.read()
@@ -355,7 +377,7 @@ class BitsParser:
             self.output_jobs(file_path, jobs)
 
         except Exception:
-            print(f'Exception occurred processing file {file_path}: ' + traceback.format_exc())
+            print(f'Exception occurred processing file {file_path}: ' + traceback.format_exc(), file=sys.stderr)
 
 
     def determine_directory_architecture(self, path):
@@ -372,6 +394,7 @@ class BitsParser:
         # If the queue "directory" is a file, just process the file
         if os.path.isfile(self.queue_dir):
             self.process_file(self.queue_dir)
+            return
 
         # Determine if the directory appears to belong to a Windows 10 system or an older system for carving
         self.determine_directory_architecture(self.queue_dir)
