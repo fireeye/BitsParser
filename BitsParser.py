@@ -363,7 +363,7 @@ class BitsParser:
             # Parse as a qmgr database (support old and Win10 formats)
             jobs = []
             if BitsParser.is_qmgr_database(file_data):
-                jobs = self.load_qmgr_jobs(file_data)
+                jobs = self.load_qmgr_jobs(file_path)
             elif BitsParser.is_qmgr10_database(file_data):
                 jobs = self.load_qmgr10_jobs(file_data)
 
