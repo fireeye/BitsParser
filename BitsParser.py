@@ -94,11 +94,11 @@ class BitsParser:
         return False
 
 
-    def load_qmgr_jobs(self, file_data):
+    def load_qmgr_jobs(self, file_path):
         """ Processes the given qmgr database file with ANSSI-FR, parses jobs (possibly carves jobs), and returns a list of discovered jobs. """
 
         jobs = []
-        analyzer = bits.Bits.load_file(file_data)
+        analyzer = bits.Bits.load_file(file_path)
         if self.carve_db_files or self.carve_all_files:
             for job in analyzer:
                 jobs.append(BitsJob(job, self))
@@ -363,7 +363,7 @@ class BitsParser:
             # Parse as a qmgr database (support old and Win10 formats)
             jobs = []
             if BitsParser.is_qmgr_database(file_data):
-                jobs = self.load_qmgr_jobs(file_data)
+                jobs = self.load_qmgr_jobs(file_path)
             elif BitsParser.is_qmgr10_database(file_data):
                 jobs = self.load_qmgr10_jobs(file_data)
 
