@@ -328,6 +328,7 @@ class BitsParser:
         """Cleans up and outputs the parsed jobs from the qmgr database files"""
 
         # If an output file is specified, open it and use it instead of stdout
+
         if self.out_file:
             orig_stdout = sys.stdout
             sys.stdout = open(self.out_file, "w")
@@ -348,6 +349,20 @@ class BitsParser:
             if self.out_file:
                 sys.stdout.close()
                 sys.stdout = orig_stdout
+
+
+    def get_unique_records(self, jobs):
+        records = list()
+        for job in jobs:
+            # Skip incomplete carved jobs as they do not contain useful info
+            if job.is_carved() and not job.is_useful_for_analysis():
+                continue
+
+            # Output unique jobs
+            if job.hash not in self.visited_jobs:
+                records.append(job.job_dict)
+                self.visited_jobs.add(job.hash)
+        return records
 
 
     def process_file(self, file_path):
@@ -374,7 +389,11 @@ class BitsParser:
                 else:
                     jobs = self.load_non_qmgr_jobs(file_data)
 
-            self.output_jobs(file_path, jobs)
+            if self.out_file and self.out_file.endswith(".csv"):
+                import csv_writer
+                csv_writer.write_csv(self.out_file, self.get_unique_records(jobs))
+            else:
+                self.output_jobs(file_path, jobs)
 
         except Exception:
             print(f'Exception occurred processing file {file_path}: ' + traceback.format_exc(), file=sys.stderr)
